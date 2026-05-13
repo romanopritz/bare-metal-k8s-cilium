@@ -1,0 +1,81 @@
+---
+# Add a new control-plane node without re-running site.yml.
+#
+# Usage:
+#   1. Add the new host to ansible/inventory.ini under [controlplane].
+#   2. cd ansible && ansible-playbook -i inventory.ini join-controlplane.yml
+#
+# Do NOT pass -l <new-cp>: every existing node must re-render its local
+# HAProxy so it learns the new apiserver as a backend. Existing CPs are
+# no-ops for the actual join step -- the controlplane-join role has a
+# `creates: /etc/kubernetes/kubelet.conf` guard.
+
+- name: Prep the new control-plane host(s)
+  hosts: controlplane
+  become: true
+  gather_facts: true
+  # One CP at a time so an unexpected kernel reboot (apt dist-upgrade in
+  # the common role) can never take down etcd quorum.
+  serial: 1
+  roles:
+    - common
+    - containerd
+    - kube
+
+- name: Re-render HAProxy on every node so it picks up the new backend
+  hosts: cluster
+  become: true
+  # node_ip / node_name on each CP were set as facts during the prep
+  # play above and persist in hostvars for the rest of this run, which
+  # is all the haproxy template needs.
+  gather_facts: false
+  roles:
+    - haproxy
+
+- name: Mint a fresh control-plane join token + certificate-key on cp1
+  hosts: cp1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Create a fresh bootstrap join command
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: cp_join_cmd
+      changed_when: false
+
+    - name: Upload control-plane certs and emit a fresh certificate-key
+      ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
+      register: cp_upload_certs
+      changed_when: false
+
+    - name: Parse the certificate-key (the 64-hex line of upload-certs output)
+      ansible.builtin.set_fact:
+        cp_certificate_key: "{{ cp_upload_certs.stdout_lines | select('match', '^[a-f0-9]{64}$') | list | first }}"
+
+    - name: Compute CA cert hash
+      ansible.builtin.shell: |
+        set -o pipefail
+        openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt \
+        | openssl rsa -pubin -outform der 2>/dev/null \
+        | openssl dgst -sha256 -hex | awk '{print $NF}'
+      args:
+        executable: /bin/bash
+      register: ca_hash_out
+      changed_when: false
+
+    - name: Distribute join facts to every CP host
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        join_token: "{{ cp_join_cmd.stdout.split('--token')[1].split()[0] }}"
+        ca_cert_hash: "{{ ca_hash_out.stdout }}"
+        cp_certificate_key: "{{ cp_certificate_key }}"
+        first_cp_ip: "{{ node_ip }}"
+      loop: "{{ groups['controlplane'] }}"
+
+- name: Join the new control-plane node(s)
+  hosts: controlplane:!cp1
+  become: true
+  gather_facts: false
+  # Serial so etcd sees one new voting member at a time.
+  serial: 1
+  roles:
+    - controlplane-join

@@ -1,0 +1,126 @@
+---
+# Discover node identity from facts so the inventory file doesn't need
+# to carry per-host IPs (keeps real IPs out of git). node_name is the
+# Ansible inventory name; node_ip is the IPv4 on the default-route NIC.
+- name: Discover node identity
+  ansible.builtin.set_fact:
+    node_name: "{{ inventory_hostname }}"
+    node_ip: "{{ ansible_default_ipv4.address }}"
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ node_name }}"
+
+- name: Ensure /etc/hosts maps hostname to public IP
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ node_ip }}\\s"
+    line: "{{ node_ip }} {{ node_name }}"
+    state: present
+
+# Apply pending upgrades once so we run kubeadm on the kernel we'll
+# keep, then reboot if a kernel/lib change asked for it. Subsequent
+# runs are no-ops.
+- name: Apt dist-upgrade
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+    autoremove: true
+    autoclean: true
+  register: apt_upgrade
+
+- name: Check whether a reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Reboot to pick up the new kernel
+  ansible.builtin.reboot:
+    msg: "Ansible: applying pending kernel upgrade before kubeadm"
+    reboot_timeout: 600
+  when: reboot_required.stat.exists
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - apt-transport-https
+      - software-properties-common
+      - chrony
+      - conntrack
+      - socat
+      - ipset
+      - ipvsadm
+      - jq
+      - nftables
+      - python3-apt
+      - wireguard-tools
+      - ethtool
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure chrony is running
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  changed_when: false
+  when: ansible_swaptotal_mb is defined and ansible_swaptotal_mb > 0
+
+- name: Persist swap disabled across reboots
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+
+- name: Load kernel modules now
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Persist kernel modules on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/kubernetes.conf
+    mode: "0644"
+    content: |
+      overlay
+      br_netfilter
+
+- name: Apply Kubernetes sysctls
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+    sysctl_set: true
+    reload: true
+    state: present
+  loop:
+    - { name: net.bridge.bridge-nf-call-iptables,  value: "1" }
+    - { name: net.bridge.bridge-nf-call-ip6tables, value: "1" }
+    - { name: net.ipv4.ip_forward,                 value: "1" }
+    - { name: net.ipv6.conf.all.forwarding,        value: "1" }
+    - { name: fs.inotify.max_user_instances,       value: "8192" }
+    - { name: fs.inotify.max_user_watches,         value: "524288" }
+    - { name: vm.max_map_count,                    value: "262144" }
+
+- name: Deploy nftables ruleset
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    mode: "0644"
+  notify: Reload nftables
+
+- name: Ensure nftables is enabled and started
+  ansible.builtin.service:
+    name: nftables
+    state: started
+    enabled: true

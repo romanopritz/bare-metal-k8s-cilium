@@ -1,0 +1,46 @@
+# ingress-nginx as DaemonSet on workers with hostNetwork.
+# This is how we expose Services without a cloud load balancer:
+# clients hit any worker:80/:443 directly. DNS round-robin across the
+# worker public IPs gives client-side failover.
+
+controller:
+  kind: DaemonSet
+  hostNetwork: true
+  hostPort:
+    enabled: true
+    ports:
+      http: 80
+      https: 443
+  dnsPolicy: ClusterFirstWithHostNet
+
+  # No Service-of-type-LoadBalancer (we don't have a cloud LB).
+  # A ClusterIP Service is still useful for in-cluster reach to /healthz
+  # and metrics. externalTrafficPolicy isn't applicable to ClusterIP.
+  service:
+    enabled: true
+    type: ClusterIP
+
+  # Schedule only on worker nodes.
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+  tolerations: []
+
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: true
+
+  watchIngressWithoutClass: true
+
+  # Allow snippet annotations for the L7 demo.
+  allowSnippetAnnotations: true
+
+  config:
+    use-forwarded-headers: "true"
+    enable-real-ip: "true"
+
+  metrics:
+    enabled: true
+
+  admissionWebhooks:
+    enabled: true

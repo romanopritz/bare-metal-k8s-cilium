@@ -1,0 +1,50 @@
+---
+# Add new workers without re-running the full site.yml.
+# Usage: ansible-playbook -i inventory.ini join-workers.yml -l new-worker
+# (Add the new host to [workers] in inventory.ini first.)
+
+- name: Prep new workers
+  hosts: workers
+  become: true
+  gather_facts: true
+  roles:
+    - common
+    - containerd
+    - kube
+    - haproxy
+
+- name: Mint a fresh join token from cp1
+  hosts: cp1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Print join command
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: worker_join_cmd
+      changed_when: false
+
+    - name: Compute CA cert hash
+      ansible.builtin.shell: |
+        set -o pipefail
+        openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt \
+        | openssl rsa -pubin -outform der 2>/dev/null \
+        | openssl dgst -sha256 -hex | awk '{print $NF}'
+      args:
+        executable: /bin/bash
+      register: ca_hash_out
+      changed_when: false
+
+    - name: Distribute join facts
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        join_token: "{{ worker_join_cmd.stdout.split('--token')[1].split()[0] }}"
+        ca_cert_hash: "{{ ca_hash_out.stdout }}"
+        first_cp_ip: "{{ node_ip }}"
+      loop: "{{ groups['workers'] }}"
+
+- name: Join new workers
+  hosts: workers
+  become: true
+  gather_facts: false
+  roles:
+    - workers-join

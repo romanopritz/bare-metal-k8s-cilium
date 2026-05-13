@@ -1,0 +1,84 @@
+---
+# Initialise the first control plane and harvest join material for the
+# other CPs and workers.
+
+- name: Check whether this node is already part of a cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_already_init
+
+- name: Render kubeadm init configuration
+  ansible.builtin.template:
+    src: kubeadm-init-config.yaml.j2
+    dest: /etc/kubernetes/kubeadm-init-config.yaml
+    mode: "0600"
+
+- name: Pre-pull control-plane images
+  ansible.builtin.command: kubeadm config images pull --kubernetes-version v{{ kubernetes_version }}
+  changed_when: false
+  when: not kubeadm_already_init.stat.exists
+
+- name: Run kubeadm init (skipping kube-proxy addon - Cilium replaces it)
+  ansible.builtin.command: >-
+    kubeadm init
+      --config /etc/kubernetes/kubeadm-init-config.yaml
+      --upload-certs
+      --skip-phases=addon/kube-proxy
+  args:
+    creates: /etc/kubernetes/admin.conf
+  register: kubeadm_init_run
+
+- name: Ensure /root/.kube exists
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+
+- name: Install admin kubeconfig for root
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    mode: "0600"
+
+- name: Fetch admin.conf to the operator machine
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ kubeconfig_local_path }}"
+    flat: true
+
+- name: Rewrite local admin.conf to use the first CP's public IP
+  # 127.0.0.1:{{ local_lb_port }} is the local HAProxy on each node. From
+  # the operator machine we either talk to an apiserver directly or via
+  # an SSH local-forward (see README).
+  ansible.builtin.replace:
+    path: "{{ kubeconfig_local_path }}"
+    regexp: 'server: https://127\.0\.0\.1:{{ local_lb_port }}'
+    replace: "server: https://{{ node_ip }}:{{ apiserver_port }}"
+  delegate_to: localhost
+  become: false
+
+- name: Create a fresh worker join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  changed_when: false
+  register: worker_join_cmd
+
+- name: Upload a fresh control-plane certificate-key
+  ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
+  changed_when: false
+  register: cp_upload_certs
+
+- name: Parse the certificate-key (last line of the upload-certs output)
+  ansible.builtin.set_fact:
+    cp_certificate_key: "{{ cp_upload_certs.stdout_lines | select('match', '^[a-f0-9]{64}$') | list | first }}"
+
+- name: Stash join material on the controlplane-init host (used by play vars)
+  ansible.builtin.set_fact:
+    worker_join_command: "{{ worker_join_cmd.stdout }}"
+    cp_join_command: "{{ worker_join_cmd.stdout }} --control-plane --certificate-key {{ cp_certificate_key }}"
+
+- name: Show join commands
+  ansible.builtin.debug:
+    msg:
+      - "worker join: {{ worker_join_command }}"
+      - "controlplane join: {{ cp_join_command }}"

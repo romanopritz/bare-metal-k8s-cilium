@@ -1,0 +1,51 @@
+---
+- name: Ensure /etc/apt/keyrings exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Add Kubernetes apt signing key
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_apt_series }}/deb/Release.key"
+    dest: "/etc/apt/keyrings/kubernetes-{{ kubernetes_apt_series }}.asc"
+    mode: "0644"
+    force: false
+
+- name: Add Kubernetes apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-{{ kubernetes_apt_series }}.asc] https://pkgs.k8s.io/core:/stable:/{{ kubernetes_apt_series }}/deb/ /"
+    filename: "kubernetes-{{ kubernetes_apt_series }}"
+    state: present
+    update_cache: true
+
+- name: Install kubeadm, kubelet, kubectl (pinned)
+  ansible.builtin.apt:
+    name:
+      - "kubeadm={{ kubernetes_version }}-1.1"
+      - "kubelet={{ kubernetes_version }}-1.1"
+      - "kubectl={{ kubernetes_version }}-1.1"
+    state: present
+    allow_downgrade: true
+
+- name: Hold kube* packages so unattended upgrades don't bump them
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+
+- name: Configure kubelet to advertise the public node IP
+  ansible.builtin.copy:
+    dest: /etc/default/kubelet
+    mode: "0644"
+    content: |
+      KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+  notify: Restart kubelet
+
+- name: Ensure kubelet is enabled (it will crash-loop until kubeadm runs - that is expected)
+  ansible.builtin.service:
+    name: kubelet
+    enabled: true

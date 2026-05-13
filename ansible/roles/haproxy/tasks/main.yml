@@ -1,0 +1,34 @@
+---
+# A tiny HAProxy on every node, listening on 127.0.0.1:8443, fronting
+# the 3 kube-apiservers. This is the standard "kubeadm HA without a
+# cloud LB" pattern -- every kubelet/kubeconfig talks to its local
+# HAProxy, so any apiserver outage is masked client-side.
+
+- name: Install haproxy
+  ansible.builtin.apt:
+    name: haproxy
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Render haproxy.cfg
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: "0644"
+    validate: "haproxy -f %s -c"
+  notify: Reload haproxy
+
+- name: Allow haproxy to bind on any address (no-op here, but documents intent)
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_nonlocal_bind
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-haproxy.conf
+    sysctl_set: true
+    reload: true
+
+- name: Ensure haproxy is enabled and started
+  ansible.builtin.service:
+    name: haproxy
+    state: started
+    enabled: true

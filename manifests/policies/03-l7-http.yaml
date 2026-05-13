@@ -1,0 +1,43 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: web-l7-only-get-root
+  namespace: web
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  ingress:
+    # ingress-nginx runs on hostNetwork, so its identity in Cilium is
+    # `host`/`remote-node` rather than a namespace+pod selector. We allow
+    # only GET / and GET /health from those entities -- everything else
+    # is denied at L7 (returns 403 from Cilium's Envoy proxy).
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+          rules:
+            http:
+              - method: "GET"
+                path: "/$"
+              - method: "GET"
+                path: "/health$"
+    # Same L7 rules for the in-namespace curl client, so we can
+    # demonstrate the "GET / works, POST / denied" pattern from inside
+    # the cluster.
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: curl
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+          rules:
+            http:
+              - method: "GET"
+                path: "/$"
+              - method: "GET"
+                path: "/health$"

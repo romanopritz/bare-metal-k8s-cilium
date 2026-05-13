@@ -1,0 +1,43 @@
+---
+# Wipes a cluster so site.yml can re-bootstrap from a clean state.
+# Use with care.
+
+- name: Reset every node
+  hosts: cluster
+  become: true
+  gather_facts: false
+  tasks:
+    - name: kubeadm reset
+      ansible.builtin.command: kubeadm reset -f
+      failed_when: false
+      changed_when: true
+
+    - name: Stop kubelet/containerd
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - kubelet
+        - containerd
+      failed_when: false
+
+    - name: Clean up state
+      ansible.builtin.shell: |
+        rm -rf /etc/kubernetes/*
+        rm -rf /var/lib/etcd
+        rm -rf /var/lib/kubelet/*
+        rm -rf /etc/cni/net.d/*
+        rm -rf /root/.kube
+        ip link del cilium_vxlan || true
+        ip link del cilium_host || true
+        ip link del cilium_net  || true
+        ip link del cilium_wg0  || true
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Restart containerd
+      ansible.builtin.service:
+        name: containerd
+        state: started
+      failed_when: false

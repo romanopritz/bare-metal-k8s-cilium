@@ -1,0 +1,83 @@
+---
+- name: Common host prep on every node
+  hosts: cluster
+  become: true
+  gather_facts: true
+  roles:
+    - common
+    - containerd
+    - kube
+    - haproxy
+
+- name: Bootstrap first control plane
+  hosts: cp1
+  become: true
+  gather_facts: false
+  roles:
+    - controlplane-init
+
+- name: Collect CA hash + join token from cp1
+  hosts: cp1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Compute CA cert hash
+      ansible.builtin.shell: |
+        set -o pipefail
+        openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt \
+        | openssl rsa -pubin -outform der 2>/dev/null \
+        | openssl dgst -sha256 -hex | awk '{print $NF}'
+      args:
+        executable: /bin/bash
+      register: ca_hash_out
+      changed_when: false
+
+    - name: Extract bootstrap token from worker_join_command
+      ansible.builtin.set_fact:
+        join_token: "{{ worker_join_command.split('--token')[1].split()[0] }}"
+        ca_cert_hash: "{{ ca_hash_out.stdout }}"
+
+    - name: Share these facts back to every host
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        join_token: "{{ join_token }}"
+        ca_cert_hash: "{{ ca_cert_hash }}"
+        cp_certificate_key: "{{ cp_certificate_key }}"
+        first_cp_ip: "{{ node_ip }}"
+      loop: "{{ groups['cluster'] }}"
+
+- name: Join the other control-plane nodes
+  hosts: controlplane:!cp1
+  become: true
+  gather_facts: false
+  serial: 1
+  roles:
+    - controlplane-join
+
+- name: Join the workers
+  hosts: workers
+  become: true
+  gather_facts: false
+  roles:
+    - workers-join
+
+- name: Label workers
+  hosts: cp1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Apply node-role label to workers
+      ansible.builtin.command: >-
+        kubectl --kubeconfig=/etc/kubernetes/admin.conf
+          label node {{ hostvars[item].node_name }}
+          node-role.kubernetes.io/worker=
+          --overwrite
+      loop: "{{ groups['workers'] }}"
+      changed_when: false
+
+- name: Install Cilium
+  hosts: cp1
+  become: true
+  gather_facts: false
+  roles:
+    - cilium

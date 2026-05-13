@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-nginx
+  namespace: web
+data:
+  default.conf: |
+    server {
+      listen 80 default_server;
+      server_name _;
+
+      add_header X-Pod-Name $hostname always;
+
+      location = /health {
+        access_log off;
+        return 200 "ok\n";
+      }
+
+      location / {
+        default_type text/html;
+        return 200 "<!doctype html>\n<html><head><title>bare-metal k8s demo</title></head>\n<body style=\"font-family: system-ui; padding: 2rem; max-width: 40rem; margin: auto;\">\n<h1>Hello from the bare-metal cluster</h1>\n<p>Served by pod <code>$hostname</code>.</p>\n<p>This response reached you through:</p>\n<ol>\n<li>DNS round-robin -> a worker public IP</li>\n<li>ingress-nginx DaemonSet on the worker (hostNetwork :80/:443)</li>\n<li>Cilium eBPF service load balancing</li>\n<li>VXLAN over WireGuard to this pod (if remote)</li>\n</ol>\n</body></html>\n";
+      }
+    }

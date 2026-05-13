@@ -1,0 +1,21 @@
+---
+- name: Check if node already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Render kubeadm worker join config
+  ansible.builtin.template:
+    src: kubeadm-join-worker.yaml.j2
+    dest: /etc/kubernetes/kubeadm-join.yaml
+    mode: "0600"
+  when: not kubelet_conf.stat.exists
+
+- name: kubeadm join as worker
+  ansible.builtin.command: kubeadm join --config /etc/kubernetes/kubeadm-join.yaml
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+
+- name: Label as worker (best-effort, from the operator on first CP)
+  ansible.builtin.debug:
+    msg: "Worker labels are applied from the controlplane play."

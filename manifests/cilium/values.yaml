@@ -1,0 +1,79 @@
+# Cilium Helm values.
+# - kube-proxy replacement: full eBPF data plane
+# - VXLAN tunnel: nodes are not on a shared L2
+# - WireGuard: inter-node traffic crosses the public Internet
+# - Hubble + UI: observability for debugging demos
+
+kubeProxyReplacement: true
+
+# Talk to apiserver via local HAProxy, not the in-cluster Service (which
+# would itself require kube-proxy-replacement to be installed first --
+# chicken-and-egg).
+k8sServiceHost: "127.0.0.1"
+k8sServicePort: 16443
+
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - "10.244.0.0/16"
+    clusterPoolIPv4MaskSize: 24
+
+encryption:
+  enabled: true
+  type: wireguard
+  nodeEncryption: true
+
+bpf:
+  masquerade: true
+  hostLegacyRouting: false
+
+endpointRoutes:
+  enabled: true
+
+enableIPv4Masquerade: true
+enableIPv6Masquerade: false
+
+nodeSelector:
+  kubernetes.io/os: linux
+
+tolerations:
+  - operator: Exists
+
+operator:
+  replicas: 2
+  rollOutPods: true
+  prometheus:
+    enabled: true
+
+prometheus:
+  enabled: true
+
+hubble:
+  enabled: true
+  metrics:
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+      - port-distribution
+      - icmp
+      - "httpV2:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction"
+  relay:
+    enabled: true
+    rollOutPods: true
+  ui:
+    enabled: true
+    rollOutPods: true
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+
+cni:
+  exclusive: true

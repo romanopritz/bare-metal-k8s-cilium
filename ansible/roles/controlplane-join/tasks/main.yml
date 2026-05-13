@@ -1,0 +1,30 @@
+---
+- name: Skip when this node is already a member
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Render kubeadm join config (control plane)
+  ansible.builtin.template:
+    src: kubeadm-join-cp.yaml.j2
+    dest: /etc/kubernetes/kubeadm-join.yaml
+    mode: "0600"
+  when: not kubelet_conf.stat.exists
+
+- name: kubeadm join as control plane
+  ansible.builtin.command: kubeadm join --config /etc/kubernetes/kubeadm-join.yaml
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+
+- name: Ensure /root/.kube exists
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+
+- name: Install admin kubeconfig for root
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    mode: "0600"

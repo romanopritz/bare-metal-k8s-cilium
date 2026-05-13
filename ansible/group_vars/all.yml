@@ -1,0 +1,54 @@
+---
+# Versions
+kubernetes_version: "1.31.4"
+kubernetes_apt_series: "v1.31"
+containerd_version: "1.7.*"
+cilium_version: "1.16.5"
+ingress_nginx_chart_version: "4.11.3"
+
+# Cluster
+cluster_name: bm-k8s
+pod_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+cluster_dns: "10.96.0.10"
+# Every node talks to its local HAProxy that fronts the 3 apiservers.
+# Use 16443 (well-known kubeadm-HA alt port) to keep 8443 free for
+# host-network workloads like ingress-nginx admission webhook.
+control_plane_endpoint: "127.0.0.1:16443"
+apiserver_port: 6443
+local_lb_port: 16443
+
+# Cilium
+cilium_helm_repo: "https://helm.cilium.io/"
+cilium_namespace: kube-system
+
+# Inter-cluster traffic ports (between the 5 nodes only)
+cluster_tcp_ports:
+  - 6443    # kube-apiserver
+  - 2379    # etcd client
+  - 2380    # etcd peer
+  - 10250   # kubelet
+  - 10256   # kube-proxy healthz (not used with kpr, harmless)
+  - 4240    # cilium health
+  - 4244    # hubble server
+  - 4245    # hubble relay
+cluster_udp_ports:
+  - 8472    # VXLAN
+  - 51871   # WireGuard (Cilium default)
+
+# Ports exposed to the world on workers
+public_tcp_ports:
+  - 80
+  - 443
+
+# SSH allowlist (open to the world by default; tighten in production)
+ssh_allowlist:
+  - 0.0.0.0/0
+
+# Demo app
+app_namespace: web
+app_image: nginx:1.27-alpine
+app_host: app.k8s.local
+
+# Render kubeconfig locally on the operator machine
+kubeconfig_local_path: "{{ playbook_dir }}/admin.conf"

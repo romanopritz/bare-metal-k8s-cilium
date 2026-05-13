@@ -1,0 +1,72 @@
+---
+# Egress: only DNS to kube-dns, nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: web
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress for the curl debug pod: DNS + reach to web pods on :80.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-curl-egress
+  namespace: web
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: curl
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# Curl pod must also accept ingress from inside the namespace so we can
+# kubectl exec into it without surprises (the default-deny applies to it
+# too).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-curl-ingress
+  namespace: web
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: curl
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}

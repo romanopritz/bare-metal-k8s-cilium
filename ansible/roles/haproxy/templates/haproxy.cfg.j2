@@ -1,0 +1,37 @@
+# Managed by Ansible -- localhost LB for kube-apiserver HA.
+
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    daemon
+    maxconn 4096
+
+defaults
+    log     global
+    mode    tcp
+    option  tcplog
+    option  dontlognull
+    timeout connect 5s
+    timeout client  30m
+    timeout server  30m
+    retries 3
+
+frontend kube_api
+    bind 127.0.0.1:{{ local_lb_port }}
+    bind ::1:{{ local_lb_port }}
+    default_backend kube_api_backend
+
+backend kube_api_backend
+    option httpchk GET /livez
+    http-check expect status 200
+    balance roundrobin
+{% for h in groups['controlplane'] %}
+    server {{ hostvars[h].node_name }} {{ hostvars[h].node_ip }}:{{ apiserver_port }} check check-ssl verify none inter 2s fall 3 rise 2
+{% endfor %}
+
+listen stats
+    bind 127.0.0.1:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 5s
