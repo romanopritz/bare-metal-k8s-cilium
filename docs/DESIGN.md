@@ -112,6 +112,15 @@ Cilium-idiomatic way to permit those flows precisely.
   rather than a real VIP. The simplest production fix is to ask the
   hoster for a private network / vSwitch and switch to Cilium native
   routing with kube-vip or Cilium L2 announcements for service IPs.
+- **No cloud-controller-manager, so `Node.status.addresses` only has
+  `InternalIP`.** Kubelet is launched with `--node-ip=<public IP>` (the
+  only routable address on each host), which becomes the Node's
+  `InternalIP`. `ExternalIP` is populated by a CCM, and on
+  dedicated/bare-metal nodes there is no off-the-shelf CCM to install
+  -- the available ones all target hyperscalers' managed-VM APIs.
+  Nothing in the cluster needs `ExternalIP` (intra-cluster traffic,
+  `NodePort`, `kubectl logs/exec`, and the Cilium tunnel all consume
+  `InternalIP`); it only looks unusual in `kubectl get nodes -o wide`.
 - **DNS round-robin is not a true LB.** Failover is client-side and
   depends on the client honoring the multi-record answer. Real
   production would put a hardware/software LB (or anycast) in front.

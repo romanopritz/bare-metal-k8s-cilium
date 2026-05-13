@@ -7,11 +7,11 @@ Captured: 2026-05-11T12:18:09Z
 ```
 $ kubectl get nodes -o wide
 NAME      STATUS   ROLES           AGE     VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
-cp1       Ready    control-plane   9m1s    v1.31.4   <cp1-ip>     <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
-cp2       Ready    control-plane   8m39s   v1.31.4   <cp2-ip>    <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
-cp3       Ready    control-plane   8m29s   v1.31.4   <cp3-ip>   <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
-worker1   Ready    worker          8m20s   v1.31.4   <worker1-ip>   <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
-worker2   Ready    worker          8m20s   v1.31.4   <worker2-ip>     <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
+cp1       Ready    control-plane   9m1s    v1.31.4   <cp1-ip>        <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
+cp2       Ready    control-plane   8m39s   v1.31.4   <cp2-ip>        <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
+cp3       Ready    control-plane   8m29s   v1.31.4   <cp3-ip>        <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
+worker1   Ready    worker          8m20s   v1.31.4   <worker1-ip>    <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
+worker2   Ready    worker          8m20s   v1.31.4   <worker2-ip>    <none>        Ubuntu 24.04.4 LTS   6.8.0-111-generic   containerd://1.7.29
 ```
 
 ## 2. Pods running across nodes (system, ingress, app)
@@ -21,34 +21,34 @@ worker2   Ready    worker          8m20s   v1.31.4   <worker2-ip>     <none>    
 ```
 $ kubectl -n kube-system get pods -o wide
 NAME                               READY   STATUS    RESTARTS   AGE     IP              NODE      NOMINATED NODE   READINESS GATES
-cilium-envoy-9tn6l                 1/1     Running   0          8m7s    <cp2-ip>    cp2       <none>           <none>
-cilium-envoy-hkcqb                 1/1     Running   0          8m7s    <worker1-ip>   worker1   <none>           <none>
-cilium-envoy-j8xjx                 1/1     Running   0          8m7s    <cp1-ip>     cp1       <none>           <none>
-cilium-envoy-tfgzr                 1/1     Running   0          8m7s    <worker2-ip>     worker2   <none>           <none>
-cilium-envoy-vlp7r                 1/1     Running   0          8m7s    <cp3-ip>   cp3       <none>           <none>
-cilium-flv4w                       1/1     Running   0          8m7s    <worker1-ip>   worker1   <none>           <none>
-cilium-h8pdm                       1/1     Running   0          8m6s    <cp3-ip>   cp3       <none>           <none>
-cilium-jhrvz                       1/1     Running   0          8m6s    <worker2-ip>     worker2   <none>           <none>
-cilium-l2kg4                       1/1     Running   0          8m7s    <cp1-ip>     cp1       <none>           <none>
-cilium-nvx2n                       1/1     Running   0          8m7s    <cp2-ip>    cp2       <none>           <none>
-cilium-operator-75d4cd75d9-lcrj7   1/1     Running   0          8m7s    <worker2-ip>     worker2   <none>           <none>
-cilium-operator-75d4cd75d9-rrzpd   1/1     Running   0          8m7s    <worker1-ip>   worker1   <none>           <none>
+cilium-envoy-9tn6l                 1/1     Running   0          8m7s    <cp2-ip>        cp2       <none>           <none>
+cilium-envoy-hkcqb                 1/1     Running   0          8m7s    <worker1-ip>    worker1   <none>           <none>
+cilium-envoy-j8xjx                 1/1     Running   0          8m7s    <cp1-ip>        cp1       <none>           <none>
+cilium-envoy-tfgzr                 1/1     Running   0          8m7s    <worker2-ip>    worker2   <none>           <none>
+cilium-envoy-vlp7r                 1/1     Running   0          8m7s    <cp3-ip>        cp3       <none>           <none>
+cilium-flv4w                       1/1     Running   0          8m7s    <worker1-ip>    worker1   <none>           <none>
+cilium-h8pdm                       1/1     Running   0          8m6s    <cp3-ip>        cp3       <none>           <none>
+cilium-jhrvz                       1/1     Running   0          8m6s    <worker2-ip>    worker2   <none>           <none>
+cilium-l2kg4                       1/1     Running   0          8m7s    <cp1-ip>        cp1       <none>           <none>
+cilium-nvx2n                       1/1     Running   0          8m7s    <cp2-ip>        cp2       <none>           <none>
+cilium-operator-75d4cd75d9-lcrj7   1/1     Running   0          8m7s    <worker2-ip>    worker2   <none>           <none>
+cilium-operator-75d4cd75d9-rrzpd   1/1     Running   0          8m7s    <worker1-ip>    worker1   <none>           <none>
 coredns-7c65d6cfc9-f7tzn           1/1     Running   0          8m58s   10.244.0.129    worker1   <none>           <none>
 coredns-7c65d6cfc9-nqvzf           1/1     Running   0          8m58s   10.244.0.53     worker1   <none>           <none>
-etcd-cp1                           1/1     Running   1          9m      <cp1-ip>     cp1       <none>           <none>
-etcd-cp2                           1/1     Running   1          8m38s   <cp2-ip>    cp2       <none>           <none>
-etcd-cp3                           1/1     Running   0          8m28s   <cp3-ip>   cp3       <none>           <none>
+etcd-cp1                           1/1     Running   1          9m      <cp1-ip>        cp1       <none>           <none>
+etcd-cp2                           1/1     Running   1          8m38s   <cp2-ip>        cp2       <none>           <none>
+etcd-cp3                           1/1     Running   0          8m28s   <cp3-ip>        cp3       <none>           <none>
 hubble-relay-7cd59dfb8d-d7ffd      1/1     Running   0          8m7s    10.244.0.49     worker1   <none>           <none>
 hubble-ui-dff775b8d-ff4hf          2/2     Running   0          8m7s    10.244.0.62     worker1   <none>           <none>
-kube-apiserver-cp1                 1/1     Running   1          9m      <cp1-ip>     cp1       <none>           <none>
-kube-apiserver-cp2                 1/1     Running   1          8m38s   <cp2-ip>    cp2       <none>           <none>
-kube-apiserver-cp3                 1/1     Running   1          8m28s   <cp3-ip>   cp3       <none>           <none>
-kube-controller-manager-cp1        1/1     Running   1          9m      <cp1-ip>     cp1       <none>           <none>
-kube-controller-manager-cp2        1/1     Running   1          8m35s   <cp2-ip>    cp2       <none>           <none>
-kube-controller-manager-cp3        1/1     Running   1          8m21s   <cp3-ip>   cp3       <none>           <none>
-kube-scheduler-cp1                 1/1     Running   1          9m      <cp1-ip>     cp1       <none>           <none>
-kube-scheduler-cp2                 1/1     Running   1          8m34s   <cp2-ip>    cp2       <none>           <none>
-kube-scheduler-cp3                 1/1     Running   1          8m28s   <cp3-ip>   cp3       <none>           <none>
+kube-apiserver-cp1                 1/1     Running   1          9m      <cp1-ip>        cp1       <none>           <none>
+kube-apiserver-cp2                 1/1     Running   1          8m38s   <cp2-ip>        cp2       <none>           <none>
+kube-apiserver-cp3                 1/1     Running   1          8m28s   <cp3-ip>        cp3       <none>           <none>
+kube-controller-manager-cp1        1/1     Running   1          9m      <cp1-ip>        cp1       <none>           <none>
+kube-controller-manager-cp2        1/1     Running   1          8m35s   <cp2-ip>        cp2       <none>           <none>
+kube-controller-manager-cp3        1/1     Running   1          8m21s   <cp3-ip>        cp3       <none>           <none>
+kube-scheduler-cp1                 1/1     Running   1          9m      <cp1-ip>        cp1       <none>           <none>
+kube-scheduler-cp2                 1/1     Running   1          8m34s   <cp2-ip>        cp2       <none>           <none>
+kube-scheduler-cp3                 1/1     Running   1          8m28s   <cp3-ip>        cp3       <none>           <none>
 ```
 
 ### ingress-nginx (DaemonSet, hostNetwork)
@@ -56,8 +56,8 @@ kube-scheduler-cp3                 1/1     Running   1          8m28s   <cp3-ip>
 ```
 $ kubectl -n ingress-nginx get pods -o wide
 NAME                             READY   STATUS    RESTARTS   AGE     IP              NODE      NOMINATED NODE   READINESS GATES
-ingress-nginx-controller-gll56   1/1     Running   0          6m50s   <worker2-ip>     worker2   <none>           <none>
-ingress-nginx-controller-mqrpm   1/1     Running   0          6m50s   <worker1-ip>   worker1   <none>           <none>
+ingress-nginx-controller-gll56   1/1     Running   0          6m50s   <worker2-ip>    worker2   <none>           <none>
+ingress-nginx-controller-mqrpm   1/1     Running   0          6m50s   <worker1-ip>    worker1   <none>           <none>
 ```
 
 ### web app + curl debug pod
@@ -295,7 +295,7 @@ web-5bcff7b6ff-rgzsj   1/1     Running   0          5m42s   10.244.4.28    worke
 $ kubectl -n ingress-nginx get pods -o wide
 NAME                             READY   STATUS    RESTARTS   AGE     IP              NODE      NOMINATED NODE   READINESS GATES
 ingress-nginx-controller-gll56   1/1     Running   0          7m37s   <worker2-ip>    worker2   <none>           <none>
-ingress-nginx-controller-mqrpm   1/1     Running   0          7m37s   <worker1-ip>   worker1   <none>           <none>
+ingress-nginx-controller-mqrpm   1/1     Running   0          7m37s   <worker1-ip>    worker1   <none>           <none>
 ```
 
 ### App still reachable
