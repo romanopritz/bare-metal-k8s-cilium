@@ -51,10 +51,18 @@ Prereqs on the operator workstation: `ansible-core >= 2.16`, `kubectl`,
 cp ansible/inventory.example.ini ansible/inventory.ini
 # edit ansible/inventory.ini and set ansible_host to your real SSH targets
 
-# 2. Bring up the cluster
+# 2. Bring up the cluster (only Ansible/SSH; no kubectl yet)
 make deps        # install Ansible collections
 make bootstrap   # full cluster install (host prep, kubeadm, Cilium); ~5 min
-make ingress     # install ingress-nginx as DaemonSet (uses fetched admin.conf)
+
+# 3. Open the operator tunnel. Public 6443 is firewalled, so every
+#    kubectl/helm call from the operator workstation goes through an
+#    SSH local-forward to cp1's HAProxy. Skipping this step makes the
+#    next four targets hang on the apiserver.
+eval "$(./scripts/operator-tunnel.sh)"
+
+# 4. Deploy the rest and validate (these all use kubectl/helm)
+make ingress     # install ingress-nginx as DaemonSet
 make app         # deploy the demo nginx app
 make policies    # apply default-deny + L7 CiliumNetworkPolicy
 make verify      # quick sanity checks
@@ -65,18 +73,12 @@ make verify      # quick sanity checks
 `ansible_default_ipv4.address` and inventory name. That keeps real IPs
 out of the repo.
 
-After `make bootstrap`, an admin kubeconfig is at `ansible/admin.conf`.
-To use it from the operator workstation, open an SSH tunnel that routes
-through the local HAProxy on cp1 (which itself load-balances across all
-three apiservers):
-
-```bash
-eval "$(./scripts/operator-tunnel.sh)"   # reads CP host from inventory
-kubectl get nodes
-```
-
-The tunnel pattern keeps the firewall strict (port 6443 is blocked from
-the world) and still gives the operator workstation apiserver HA.
+The `operator-tunnel.sh` script reads the first CP from
+`ansible/inventory.ini`, sets up `127.0.0.1:6443 -> cp1:16443` on the
+local machine, and rewrites `ansible/admin.conf` to point at the local
+end of the tunnel. After it runs, `kubectl get nodes` works as
+expected and benefits from HAProxy's `/livez` health checks across all
+three apiservers.
 
 ## Repository layout
 
