@@ -1,0 +1,21 @@
+*.retry
+*.swp
+*.bak
+__pycache__/
+.venv/
+.python-version
+
+# Real per-deployment inventory (copy from inventory.example.ini)
+ansible/inventory.ini
+
+ansible/.kube/
+ansible/admin.conf
+ansible/*.log
+ansible/fetched/
+ansible/.ansible/
+
+hosts
+*.pdf
+
+artifacts/
+.DS_Store
