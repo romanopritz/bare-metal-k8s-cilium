@@ -5,7 +5,9 @@ export KUBECONFIG
 
 # Set WORKER_IPS to a space-separated list of your worker public IPs to
 # exercise the "DNS round-robin -> ingress on hostNetwork" path. If
-# left empty the external-reach checks are skipped.
+# left empty, the script discovers them from kubectl (every node with
+# node-role.kubernetes.io/worker, using its InternalIP -- which on this
+# cluster equals the public IP, see docs/DESIGN.md).
 WORKER_IPS=(${WORKER_IPS:-})
 APP_HOST="${APP_HOST:-app.k8s.local}"
 
@@ -13,6 +15,14 @@ bold(){ printf "\n\033[1m== %s ==\033[0m\n" "$*"; }
 
 bold "nodes"
 kubectl get nodes -o wide
+
+if [[ ${#WORKER_IPS[@]} -eq 0 ]]; then
+  mapfile -t WORKER_IPS < <(
+    kubectl get nodes -l node-role.kubernetes.io/worker \
+      -o jsonpath='{range .items[*]}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
+      2>/dev/null | awk 'NF'
+  )
+fi
 
 bold "system pods"
 kubectl -n kube-system get pods -o wide
@@ -33,7 +43,7 @@ bold "policies"
 kubectl -n web get networkpolicy,ciliumnetworkpolicy
 
 if [[ ${#WORKER_IPS[@]} -gt 0 ]]; then
-  bold "demo: app reachable via worker public IPs (DNS round-robin path)"
+  bold "demo: app reachable via worker public IPs (${WORKER_IPS[*]})"
   for ip in "${WORKER_IPS[@]}"; do
     code=$(curl -s --resolve "${APP_HOST}:80:${ip}" -o /dev/null -w "%{http_code}" --max-time 5 "http://${APP_HOST}/" || echo "ERR")
     echo "  GET  http://${APP_HOST}/ via ${ip}  -> HTTP ${code}"
@@ -47,7 +57,7 @@ if [[ ${#WORKER_IPS[@]} -gt 0 ]]; then
     echo "  GET  http://${APP_HOST}/forbidden via ${ip}  -> HTTP ${code}"
   done
 else
-  bold "external-reach checks skipped (set WORKER_IPS=\"<w1> <w2> ...\" to enable)"
+  bold "external-reach checks skipped (no nodes labelled node-role.kubernetes.io/worker; set WORKER_IPS to override)"
 fi
 
 bold "demo: in-cluster curl pod hits the web Service directly (L7 policy applies)"
